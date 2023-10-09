@@ -6,11 +6,15 @@ Usage:
 
 - create venv:
 
-`python -m venv 958
-source 958/bin/activate`
+```
+python -m venv 958 
+source 958/bin/activate
+```
 
 - install dependencies:
 
-`pip install torch
+```
+pip install torch  
 pip install transformers
-pip install einops`
+pip install einops
+```
