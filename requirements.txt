@@ -2,3 +2,5 @@ torch
 transformers
 einops
 scipy
+pandas
+matplotlib

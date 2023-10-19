@@ -18,4 +18,6 @@ pip install torch
 pip install transformers
 pip install einops
 pip install scipy
+pip install pandas
+pip install matplotlib
 ```
