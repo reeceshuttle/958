@@ -33,4 +33,4 @@ def calc_stable_rank(M: torch.Tensor) -> float:
     _, S, _ = linalg.svd(M.detach()) # U, S, V
     max_sv = np.max(S)
     stable_rank = sum([val**2 for val in S])/(max_sv**2)
-    return stable_rank, max_sv
+    return stable_rank, [float(val) for val in S] # to avoid float32 error when storing data
