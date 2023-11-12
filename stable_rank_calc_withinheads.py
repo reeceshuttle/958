@@ -32,11 +32,11 @@ for layernum, layer in enumerate(model.layers):
                 rank, SVs = calc_stable_rank(headW)
                 stable_rank_data_perhead[f'layer {layernum}'][f'W{letter}'][f'h{headnum}'] = {'stable_rank':rank,
                                                                                               'SVs':SVs}
-        # calculating the product:
+        # calculating the product WqWkT:
         stable_rank_data_perhead[f'layer {layernum}'][f'WqWkT'] = {}
         for headnum, (qhead, khead) in enumerate(zip(Wq_heads, Wk_heads)):
-            qkT = qhead@(khead.T)
-            rank, SVs = calc_stable_rank(qkT)
+            WqWkT = qhead@(khead.T)
+            rank, SVs = calc_stable_rank(WqWkT)
             stable_rank_data_perhead[f'layer {layernum}'][f'WqWkT'][f'h{headnum}'] = {'stable_rank':rank,
                                                                                       'SVs':SVs}
 
