@@ -17,7 +17,7 @@ phi_head_dim = 64
 
 # "stable rank is a useful surrogate for rank" : https://www.cs.ubc.ca/~nickhar/W12/Lecture15Notes.pdf
 stable_rank_data_perhead = {}
-for layernum, layer in enumerate(model.layers):
+for layernum, layer in enumerate(model.transformer.h):
     # print(type(layer).__name__)
     if type(layer).__name__ == 'ParallelBlock':
         t1 = time.time()
