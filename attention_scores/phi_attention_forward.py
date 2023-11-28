@@ -45,12 +45,21 @@ def new_forward_inner_attn(
     # summing attention across dim=-1 leads to all values of 1.
     # since nan implies log(0) was done and the limit xlogx goes to zero, we replace nan w 0.
     intermediate_entropy = torch.nan_to_num(attention * torch.log(attention), nan=0.0)
-    # entropy is of shape (batch, heads, seqlen)
-    entropy = -torch.sum(intermediate_entropy, dim=-1)
+    entropy = -torch.sum(intermediate_entropy, dim=-1) # of shape (batch, heads, seqlen)
     # print(entropy[0][0])
-    avg_entropy_withinheads = torch.mean(entropy, dim=-1)
-    # avg_entropy is of shape (1, 32)
+    avg_entropy_withinheads = torch.mean(entropy, dim=-1) # of shape (batch, heads)
+    std_entropy_withinheads = torch.std(entropy, dim=-1)
+    max_entropy_withinheads = torch.max(entropy, dim=-1)
+    min_entropy_withinheads = torch.min(entropy, dim=-1)
     self.avg_entropy = avg_entropy_withinheads
+    self.std_entropy = std_entropy_withinheads
+    self.max_entropy = max_entropy_withinheads.values
+    self.min_entropy = min_entropy_withinheads.values
+    threshold = 0.1
+    # note: these values are in one list, FOR ALL HEADS COMBINED
+    self.small_val_entropies = entropy[entropy < threshold] # entropy cannot be negative, so we dont need that constraint. also min tells us it is zero.
+    # print(f'size of small vals {self.small_val_entropies.shape}')
+    # print(f'shapes: {self.avg_entropy.shape}  {self.std_entropy.shape}  {self.max_entropy.shape}  {self.min_entropy.shape}')
     # averaging the entropy within heads due to memory issues: might do stats analysis in here later?
     # later: convert to new dtype to save memory? it is float32 by default
 

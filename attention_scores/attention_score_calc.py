@@ -17,7 +17,12 @@ print(f'model loaded in {round(time.time()-st,3)} sec')
 def extract_entropy_vals(model):
     entropies = {}
     for layernum, layer in enumerate(model.transformer.h):
-        entropies[f'layer {layernum}'] = layer.mixer.inner_attn.avg_entropy.tolist()
+        entropies[f'layer {layernum}'] = {}
+        entropies[f'layer {layernum}']['mean'] = layer.mixer.inner_attn.avg_entropy.tolist()
+        entropies[f'layer {layernum}']['std'] = layer.mixer.inner_attn.std_entropy.tolist()
+        entropies[f'layer {layernum}']['max'] = layer.mixer.inner_attn.max_entropy.tolist()
+        entropies[f'layer {layernum}']['min'] = layer.mixer.inner_attn.min_entropy.tolist()
+        entropies[f'layer {layernum}']['small vals'] = layer.mixer.inner_attn.small_val_entropies.tolist()
     return entropies
 
 # ------------------------
@@ -27,7 +32,7 @@ with open("TinyStories-valid.txt", 'r') as f:
     raw_stories = content.split('<|endoftext|>')
     stories = [line.strip('\n') for line in raw_stories]
 # ------------------------
-# editing forward methods
+# editing forward method:
 from phi_attention_forward import new_forward_inner_attn
 
 for layernum, layer in enumerate(model.transformer.h):
@@ -49,7 +54,7 @@ if not os.path.exists(destination):
 
 with open(destination, 'r') as f:
     prev_data = json.load(f)
-for storynum, story in enumerate(stories[:200]):
+for storynum, story in enumerate(stories[:1000]):
     if story in prev_data:
         print(f'passing story {storynum}... (alr computed)')
     else:
@@ -60,7 +65,7 @@ for storynum, story in enumerate(stories[:200]):
         model.forward(**input_tokens)
         entropies = extract_entropy_vals(model)
         prev_data[story] = entropies
-        print(f'full time for story {storynum} (length {input_tokens.input_ids.shape[1]}): {round(time.time()-s0, 3)} sec')
+        print(f'full time for story {storynum+1} (length {input_tokens.input_ids.shape[1]}): {round(time.time()-s0, 3)} sec')
 
 print(f'writing to: {destination}')
 with open(destination, 'w') as f:
