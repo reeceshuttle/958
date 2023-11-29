@@ -31,6 +31,7 @@ with open("TinyStories-valid.txt", 'r') as f:
     content = f.read()
     raw_stories = content.split('<|endoftext|>')
     stories = [line.strip('\n') for line in raw_stories]
+    stories = [story for story in stories if 190<tokenizer(story, return_tensors="pt", return_attention_mask=False).input_ids.shape[1]<210]
 # ------------------------
 # editing forward method:
 from phi_attention_forward import new_forward_inner_attn
@@ -64,6 +65,7 @@ for storynum, story in enumerate(stories[:1000]):
         s1 = time.time()
         model.forward(**input_tokens)
         entropies = extract_entropy_vals(model)
+        entropies['token_len'] = input_tokens.input_ids.shape[1] # getting the seqlen
         prev_data[story] = entropies
         print(f'full time for story {storynum+1} (length {input_tokens.input_ids.shape[1]}): {round(time.time()-s0, 3)} sec')
 

@@ -56,10 +56,9 @@ def new_forward_inner_attn(
     self.max_entropy = max_entropy_withinheads.values
     self.min_entropy = min_entropy_withinheads.values
     threshold = 0.1
-    # note: these values are in one list, FOR ALL HEADS COMBINED
+    # note: these values are in one list, FOR ALL HEADS COMBINED:
     self.small_val_entropies = entropy[entropy < threshold] # entropy cannot be negative, so we dont need that constraint. also min tells us it is zero.
     # print(f'size of small vals {self.small_val_entropies.shape}')
-    # print(f'shapes: {self.avg_entropy.shape}  {self.std_entropy.shape}  {self.max_entropy.shape}  {self.min_entropy.shape}')
     # averaging the entropy within heads due to memory issues: might do stats analysis in here later?
     # later: convert to new dtype to save memory? it is float32 by default
 
