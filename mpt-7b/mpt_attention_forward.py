@@ -18,8 +18,23 @@ def repeat_kv_for_gqa(hidden: torch.Tensor, n_rep: int) -> torch.Tensor:
     return hidden.reshape(b, s, kv_n_heads * n_rep, d)
 
 
+# this is a new forward method for the GroupedQueryAttention class.
+def new_forward(self, x: torch.Tensor, past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]]=None, attn_bias: Optional[torch.Tensor]=None, attention_mask: Optional[torch.Tensor]=None, is_causal: bool=True, needs_weights: bool=False) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        qkv = self.Wqkv(x)
+        if self.clip_qkv:
+            qkv = qkv.clamp(min=-self.clip_qkv, max=self.clip_qkv)
+        (query, key, value) = qkv.split([self.d_model, self.kv_n_heads * self.head_dim, self.kv_n_heads * self.head_dim], dim=2)
+        key_padding_mask = attention_mask
+        if self.qk_ln:
+            dtype = query.dtype
+            query = self.q_ln(query).to(dtype)
+            key = self.k_ln(key).to(dtype)
+        (context, attn_weights, past_key_value) = self.attn_fn(self, query, key, value, self.n_heads, self.kv_n_heads, past_key_value=past_key_value, softmax_scale=self.softmax_scale, attn_bias=attn_bias, key_padding_mask=key_padding_mask, is_causal=is_causal, dropout_p=self.attn_dropout_p, training=self.training, needs_weights=needs_weights)
+        return (self.out_proj(context), attn_weights, past_key_value)
 
-def new_scaled_multihead_dot_product_attention(query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, n_heads: int, kv_n_heads: Optional[int]=None, past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]]=None, softmax_scale: Optional[float]=None, attn_bias: Optional[torch.Tensor]=None, key_padding_mask: Optional[torch.Tensor]=None, is_causal: bool=False, dropout_p: float=0.0, training: bool=False, needs_weights: bool=False, multiquery: bool=False) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+
+# this is the self.attn_fn function
+def new_scaled_multihead_dot_product_attention(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, n_heads: int, kv_n_heads: Optional[int]=None, past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]]=None, softmax_scale: Optional[float]=None, attn_bias: Optional[torch.Tensor]=None, key_padding_mask: Optional[torch.Tensor]=None, is_causal: bool=False, dropout_p: float=0.0, training: bool=False, needs_weights: bool=False, multiquery: bool=False) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor, torch.Tensor]]]:
     if multiquery:
         warnings.warn(DeprecationWarning('The direct use of the multiquery arg is deprecated. Setting kv_n_heads=1 automatically. Please set kv_n_heads=1 explicitly to remove this warning.'))
         kv_n_heads = 1
@@ -62,12 +77,31 @@ def new_scaled_multihead_dot_product_attention(query: torch.Tensor, key: torch.T
         causal_mask = ~causal_mask
         causal_mask = causal_mask[-s_q:, -s_k:]
         attn_weight = attn_weight.masked_fill(causal_mask.view(1, 1, s_q, s_k), min_val)
-    attn_weight = torch.softmax(attn_weight, dim=-1)
+    attn_weight = torch.softmax(attn_weight, dim=-1) # size (batch, heads, seqlen, seqlen)
     if dropout_p:
         attn_weight = torch.nn.functional.dropout(attn_weight, p=dropout_p, training=training, inplace=True)
-    out = attn_weight.to(v.dtype).matmul(v)
-    out = rearrange(out, 'b h s d -> b s (h d)')
-    print(f'out:{out.shape}')
+
+    # we want to use attn_weight here.
+    # print(f'attn_weight:{attn_weight.shape}')
+    # torch.sum(attn_weight, dim=-1) -> all 1's
+    intermediate_entropy = torch.nan_to_num(attn_weight * torch.log(attn_weight), nan=0.0)
+    entropy = -torch.sum(intermediate_entropy, dim=-1) # size (batch, heads, seqlen)
+    avg_entropy_withinheads = torch.mean(entropy, dim=-1) # of shape (batch, heads)
+    std_entropy_withinheads = torch.std(entropy, dim=-1)
+    max_entropy_withinheads = torch.max(entropy, dim=-1)
+    min_entropy_withinheads = torch.min(entropy, dim=-1)
+    self.avg_entropy = avg_entropy_withinheads
+    self.std_entropy = std_entropy_withinheads
+    self.max_entropy = max_entropy_withinheads.values
+    self.min_entropy = min_entropy_withinheads.values
+    threshold = 0.1
+    # note: these values are in one list, FOR ALL HEADS COMBINED:
+    self.small_val_entropies = entropy[entropy < threshold] # entropy cannot be negative, so we dont need that constraint. also min tells us it is zero.
+
+    # since this is a fn with no self passed, should we edit the above method as well do pass self so that we can store the vals?
+
+    out = attn_weight.to(v.dtype).matmul(v) # out is of size (batch, heads, seqlen, hiddendim)
+    out = rearrange(out, 'b h s d -> b s (h d)') # out is size (batch, seqlen, heads*hiddendim) after this
     if needs_weights:
         return (out, attn_weight, past_key_value)
     return (out, None, past_key_value)
