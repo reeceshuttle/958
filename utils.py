@@ -30,7 +30,7 @@ def calc_stable_rank(M: torch.Tensor) -> float:
     where sv_1 is the biggest singular value of matrix M.
     ref: https://www.cs.ubc.ca/~nickhar/W12/Lecture15Notes.pdf
     """
-    _, S, _ = linalg.svd(M.detach()) # U, S, V
+    S = linalg.svd(M.detach(), compute_uv=False)
     max_sv = np.max(S)
     stable_rank = sum([val**2 for val in S])/(max_sv**2)
     return stable_rank, [float(val) for val in S] # to avoid float32 error when storing data
