@@ -18,11 +18,9 @@ def extract_entropy_vals(model):
     entropies = {}
     for layernum, layer in enumerate(model.transformer.h):
         entropies[f'layer {layernum}'] = {}
-        entropies[f'layer {layernum}']['mean'] = layer.mixer.inner_attn.avg_entropy.tolist()
-        entropies[f'layer {layernum}']['std'] = layer.mixer.inner_attn.std_entropy.tolist()
-        entropies[f'layer {layernum}']['max'] = layer.mixer.inner_attn.max_entropy.tolist()
-        entropies[f'layer {layernum}']['min'] = layer.mixer.inner_attn.min_entropy.tolist()
-        entropies[f'layer {layernum}']['small vals'] = layer.mixer.inner_attn.small_val_entropies.tolist()
+        last_n_entropy = layer.mixer.inner_attn.last_n_entropy.tolist()
+        last_n_entropy = [[[round(val,4) for val in head] for head in last_n_entropy[0]]] # reducing memory
+        entropies[f'layer {layernum}']['last_n_entropy'] = last_n_entropy
     return entropies
 
 # ------------------------
@@ -31,7 +29,7 @@ with open("TinyStories-valid.txt", 'r') as f:
     content = f.read()
     raw_stories = content.split('<|endoftext|>')
     stories = [line.strip('\n') for line in raw_stories]
-    stories = [story for story in stories if 190<tokenizer(story, return_tensors="pt", return_attention_mask=False).input_ids.shape[1]<210]
+    stories = [story for story in stories if 200<=tokenizer(story, return_tensors="pt", return_attention_mask=False).input_ids.shape[1]]
 # ------------------------
 # editing forward method:
 from phi_attention_forward import new_forward_inner_attn
@@ -56,18 +54,18 @@ if not os.path.exists(destination):
 with open(destination, 'r') as f:
     prev_data = json.load(f)
 for storynum, story in enumerate(stories[:1000]):
-    if story in prev_data:
+    input_tokens = tokenizer(story, return_tensors="pt", return_attention_mask=False)
+    input_tokens = input_tokens.input_ids[...,:200] # taking the first 200 tokens.
+    real_story = tokenizer.batch_decode(input_tokens)[0]
+    if real_story in prev_data: # check if the story is not already in the results json. pass if it is.
         print(f'passing story {storynum}... (alr computed)')
     else:
-        # check if the story is not already in the results json. pass if it is.
         s0 = time.time()
-        input_tokens = tokenizer(story, return_tensors="pt", return_attention_mask=False)
-        s1 = time.time()
-        model.forward(**input_tokens)
+        model(input_tokens)
         entropies = extract_entropy_vals(model)
-        entropies['token_len'] = input_tokens.input_ids.shape[1] # getting the seqlen
-        prev_data[story] = entropies
-        print(f'story {storynum+1} time (length {input_tokens.input_ids.shape[1]}): {round(time.time()-s0, 3)} sec')
+        entropies['token_len'] = input_tokens.shape[1] # getting the seqlen
+        prev_data[real_story] = entropies
+        print(f'story {storynum+1} time (length {input_tokens.shape[1]}): {round(time.time()-s0, 3)} sec')
 
 print(f'writing to: {destination}')
 with open(destination, 'w') as f:

@@ -28,13 +28,13 @@ def new_forward_inner_attn(
     # Autocast is manually disabled to avoid `torch.einsum` performing the operation
     # using float16, which might lead to overflow
     scores = torch.einsum("bthd,bshd->bhts", q, k * softmax_scale)
-
+    # key_padding_mask is None
     if key_padding_mask is not None:
         padding_mask = torch.full((batch_size, seqlen), -10000.0, dtype=scores.dtype, device=scores.device)
         padding_mask.masked_fill_(key_padding_mask, 0.0)
 
         scores = scores + rearrange(padding_mask, "b s -> b 1 1 s")
-
+    # casual is True
     if causal:
         causal_mask = torch.triu(torch.full((seqlen, seqlen), -10000.0, device=scores.device), 1)
         scores = scores + causal_mask.to(dtype=scores.dtype)
@@ -46,21 +46,10 @@ def new_forward_inner_attn(
     # since nan implies log(0) was done and the limit xlogx goes to zero, we replace nan w 0.
     intermediate_entropy = torch.nan_to_num(attention * torch.log(attention), nan=0.0)
     entropy = -torch.sum(intermediate_entropy, dim=-1) # of shape (batch, heads, seqlen)
-    # print(entropy[0][0])
-    avg_entropy_withinheads = torch.mean(entropy, dim=-1) # of shape (batch, heads)
-    std_entropy_withinheads = torch.std(entropy, dim=-1)
-    max_entropy_withinheads = torch.max(entropy, dim=-1)
-    min_entropy_withinheads = torch.min(entropy, dim=-1)
-    self.avg_entropy = avg_entropy_withinheads
-    self.std_entropy = std_entropy_withinheads
-    self.max_entropy = max_entropy_withinheads.values
-    self.min_entropy = min_entropy_withinheads.values
-    threshold = 0.1
-    # note: these values are in one list, FOR ALL HEADS COMBINED:
-    self.small_val_entropies = entropy[entropy < threshold] # entropy cannot be negative, so we dont need that constraint. also min tells us it is zero.
-    # print(f'size of small vals {self.small_val_entropies.shape}')
-    # averaging the entropy within heads due to memory issues: might do stats analysis in here later?
-    # later: convert to new dtype to save memory? it is float32 by default
+    last_n = 20
+    last_n_entropy = entropy[..., -20:]
+    # print(f'entropy shape:{entropy.shape}, last_{last_n}_entropy shape:{last_n_entropy.shape}')
+    self.last_n_entropy = last_n_entropy
 
     attention = self.drop(attention)
 
