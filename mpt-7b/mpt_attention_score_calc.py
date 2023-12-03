@@ -15,11 +15,9 @@ def extract_entropy_vals(model):
     entropies = {}
     for layernum, block in enumerate(model.transformer.blocks):
         entropies[f'layer {layernum}'] = {}
-        entropies[f'layer {layernum}']['mean'] = block.attn.avg_entropy.tolist()
-        entropies[f'layer {layernum}']['std'] = block.attn.std_entropy.tolist()
-        entropies[f'layer {layernum}']['max'] = block.attn.max_entropy.tolist()
-        entropies[f'layer {layernum}']['min'] = block.attn.min_entropy.tolist()
-        entropies[f'layer {layernum}']['small vals'] = block.attn.small_val_entropies.tolist()
+        last_n_entropy = block.attn.last_n_entropy.tolist()
+        last_n_entropy = [[[round(val,4) for val in head] for head in last_n_entropy[0]]] # reducing memory
+        entropies[f'layer {layernum}']['last_n_entropy'] = last_n_entropy
     return entropies
 # ------------------------
 print(f'current working directory: {os.getcwd()}')
@@ -40,7 +38,7 @@ with open(data_loc, 'r') as f:
     content = f.read()
     raw_stories = content.split('<|endoftext|>')
     stories = [line.strip('\n') for line in raw_stories]
-    stories = [story for story in stories if 190<tokenizer(story, return_tensors="pt", return_attention_mask=False).input_ids.shape[1]<210]
+    stories = [story for story in stories if 200<=tokenizer(story, return_tensors="pt", return_attention_mask=False).input_ids.shape[1]]
 # ------------------------
 # editing forward method:
 from mpt_attention_forward import new_scaled_multihead_dot_product_attention, new_forward
@@ -66,18 +64,18 @@ with open(destination, 'r') as f:
     prev_data = json.load(f)
 
 for storynum, story in enumerate(stories[:1000]):
-    if story in prev_data:
+    input_tokens = tokenizer(story, return_tensors="pt", return_attention_mask=False)
+    input_tokens = input_tokens.input_ids[...,:200] # taking the first 200 tokens.
+    real_story = tokenizer.batch_decode(input_tokens)[0]
+    if real_story in prev_data: # check if the story is not already in the results json. pass if it is.
         print(f'passing story {storynum+1}... (alr computed)')
     else:
-        # check if the story is not already in the results json. pass if it is.
         s0 = time.time()
-        input_tokens = tokenizer(story, return_tensors="pt", return_attention_mask=False)
-        s1 = time.time()
-        model.forward(**input_tokens)
+        model(input_tokens)
         entropies = extract_entropy_vals(model)
-        entropies['token_len'] = input_tokens.input_ids.shape[1] # getting the seqlen
-        prev_data[story] = entropies
-        print(f'story {storynum+1} time (length {input_tokens.input_ids.shape[1]}): {round(time.time()-s0, 3)} sec')
+        entropies['token_len'] = input_tokens.shape[1] # getting the seqlen
+        prev_data[real_story] = entropies
+        print(f'story {storynum+1} time (length {input_tokens.shape[1]}): {round(time.time()-s0, 3)} sec')
     if storynum%10==0 and storynum!=0:
         print(f'writing to: {destination}')
         with open(destination, 'w') as f:
