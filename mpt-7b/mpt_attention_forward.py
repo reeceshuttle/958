@@ -86,20 +86,10 @@ def new_scaled_multihead_dot_product_attention(self, query: torch.Tensor, key: t
     # torch.sum(attn_weight, dim=-1) -> all 1's
     intermediate_entropy = torch.nan_to_num(attn_weight * torch.log(attn_weight), nan=0.0)
     entropy = -torch.sum(intermediate_entropy, dim=-1) # size (batch, heads, seqlen)
-    avg_entropy_withinheads = torch.mean(entropy, dim=-1) # of shape (batch, heads)
-    std_entropy_withinheads = torch.std(entropy, dim=-1)
-    max_entropy_withinheads = torch.max(entropy, dim=-1)
-    min_entropy_withinheads = torch.min(entropy, dim=-1)
-    self.avg_entropy = avg_entropy_withinheads
-    self.std_entropy = std_entropy_withinheads
-    self.max_entropy = max_entropy_withinheads.values
-    self.min_entropy = min_entropy_withinheads.values
-    threshold = 0.1
-    # note: these values are in one list, FOR ALL HEADS COMBINED:
-    self.small_val_entropies = entropy[entropy < threshold] # entropy cannot be negative, so we dont need that constraint. also min tells us it is zero.
-
-    # since this is a fn with no self passed, should we edit the above method as well do pass self so that we can store the vals?
-
+    last_n = 20
+    last_n_entropy = entropy[..., -20:]
+    self.last_n_entropy = last_n_entropy
+    
     out = attn_weight.to(v.dtype).matmul(v) # out is of size (batch, heads, seqlen, hiddendim)
     out = rearrange(out, 'b h s d -> b s (h d)') # out is size (batch, seqlen, heads*hiddendim) after this
     if needs_weights:

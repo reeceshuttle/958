@@ -32,7 +32,7 @@ model = AutoModelForCausalLM.from_pretrained("mosaicml/mpt-7b", trust_remote_cod
 print(f'model loaded in {round(time.time()-s0,2)} sec')
 
 
-mpt_head_dim = 128 #?
+mpt_head_dim = 128
 
 
 # do stable rank calc here
