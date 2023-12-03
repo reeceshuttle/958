@@ -9,20 +9,6 @@ def calc_entropy(M: torch.Tensor):
     """
     raise NotImplementedError('Implement me!')
 
-def calc_presoftmax_entropy(A: torch.Tensor):
-    """
-    Calculates the row-wise entropy before softmax.
-    A is the matrix of activation scores before softmax'd.
-    A = X(W_q)(W_k^T)X^T
-    1. We apply probability dist: P_i = |a_{1i}|/\sum^n_{j=1}|a_{1j}|
-    2. using these probabilities, we calculate entropy.
-    note that doing the scaling here doesnt matter with the probability dist
-    we use since it factors out.
-    """
-    A_ = torch.abs(A.detach())
-    P = A_/torch.sum(A_, axis=1, keepdims=True)
-    return entropy(P, axis=1)
-
 def calc_stable_rank(M: torch.Tensor) -> float:
     """
     Takes a matrix M and calculates the stable rank of it:
