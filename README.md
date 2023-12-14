@@ -1,6 +1,6 @@
-# 958
+# Characterizing Sparsity in Transformers
 
-9.58 Final Project: Measuring Sparsity in Transformers
+## Links: [[Paper]](https://drive.google.com/file/d/1oAapHSiNE0T0mVabH--1t86QTrUAQKC2/view?usp=sharing)
 
 Setup:
 
@@ -32,9 +32,3 @@ python phi-1.5/phi_stable_rank_calc.py
 ```
 python phi-1.5/phi_attention_score_calc.py
 ```
-
-TO DO:
-
-- run experiments testing the loss of these models given sparsemax or low rank approx of wqwkT.
-- clean forward methods so that they use a built in entropy method rather than by hand as currently? or at least have them use the utils method.
-- edit the stable_rank_calc and attention_score_calc files so that they generalize to both models(have it be a generic fn and pass in a config file with all the necesary differing vars for the files to generalize)
